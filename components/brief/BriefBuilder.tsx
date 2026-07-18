@@ -7,6 +7,7 @@ import { BriefForm } from "@/components/brief/BriefForm";
 import { BriefPreview } from "@/components/brief/BriefPreview";
 import { generateBrief } from "@/lib/services/ai-brief";
 import { getUserBrandProfile } from "@/lib/services/brand-profile";
+import { saveBrief } from "@/lib/services/briefs";
 import {
   EMPTY_BRIEF_FORM,
   isBriefFormValid,
@@ -43,6 +44,8 @@ export function BriefBuilder() {
   // Generated output
   const [brief, setBrief] =
     useState<GeneratedBrief | null>(null);
+  const [isSavingBrief, setIsSavingBrief] = useState(false);
+  const [savedBriefId, setSavedBriefId] = useState<string | null>(null);
 
   useEffect(() => {
     loadBrandProfile();
@@ -122,6 +125,37 @@ export function BriefBuilder() {
     }
   }
 
+  async function handleSaveBrief() {
+    if (!brief || !brand) {
+      return;
+    }
+
+    setIsSavingBrief(true);
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.push("/login");
+        return;
+      }
+
+      const savedBrief = await saveBrief(supabase, user.id, {
+        brandProfileId: brand.id,
+        form: values,
+        brief,
+      });
+
+      if (savedBrief) {
+        setSavedBriefId(brief.id);
+      }
+    } finally {
+      setIsSavingBrief(false);
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen p-10">
@@ -163,7 +197,32 @@ export function BriefBuilder() {
         isSubmitting={isSubmitting}
       />
 
-      <BriefPreview brief={brief} />
+      <div className="space-y-4">
+        <BriefPreview brief={brief} />
+
+        {brief && (
+          <div>
+            <button
+              type="button"
+              className="rounded bg-black px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={handleSaveBrief}
+              disabled={isSavingBrief || savedBriefId === brief.id}
+            >
+              {isSavingBrief
+                ? "Saving brief..."
+                : savedBriefId === brief.id
+                  ? "Brief saved"
+                  : "Save brief"}
+            </button>
+
+            {savedBriefId === brief.id && (
+              <p className="mt-2 text-sm text-green-700">
+                Brief saved successfully.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
