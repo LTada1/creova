@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { CampaignPreview } from "@/components/campaign/CampaignPreview";
 import { generateCampaign } from "@/lib/services/ai-campaign";
+import { saveCampaign } from "@/lib/services/campaigns";
 import { getBriefsForUser } from "@/lib/services/briefs";
 import { supabase } from "@/lib/supabase/client";
 import type { GeneratedBrief } from "@/types/brief";
@@ -19,6 +20,8 @@ export function CampaignBuilder() {
   const [campaign, setCampaign] = useState<GeneratedCampaign | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedCampaignId, setSavedCampaignId] = useState<string | null>(null);
 
   const selectedBrief = useMemo(
     () => briefs.find((brief) => brief.id === selectedBriefId) ?? null,
@@ -51,11 +54,39 @@ export function CampaignBuilder() {
     }
 
     setIsGenerating(true);
+    setSavedCampaignId(null);
 
     try {
       setCampaign(await generateCampaign({ brief: selectedBrief }));
     } finally {
       setIsGenerating(false);
+    }
+  }
+
+  async function handleSaveCampaign() {
+    if (!campaign) {
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.replace("/login");
+        return;
+      }
+
+      const savedCampaign = await saveCampaign(supabase, user.id, campaign);
+
+      if (savedCampaign) {
+        setSavedCampaignId(campaign.id);
+      }
+    } finally {
+      setIsSaving(false);
     }
   }
 
@@ -118,7 +149,32 @@ export function CampaignBuilder() {
         </button>
       </section>
 
-      <CampaignPreview campaign={campaign} />
+      <div className="space-y-4">
+        <CampaignPreview campaign={campaign} />
+
+        {campaign && (
+          <div>
+            <button
+              type="button"
+              className="rounded bg-black px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={handleSaveCampaign}
+              disabled={isSaving || savedCampaignId === campaign.id}
+            >
+              {isSaving
+                ? "Saving campaign..."
+                : savedCampaignId === campaign.id
+                  ? "Campaign saved"
+                  : "Save Campaign"}
+            </button>
+
+            {savedCampaignId === campaign.id && (
+              <p className="mt-2 text-sm text-green-700">
+                Campaign saved successfully.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

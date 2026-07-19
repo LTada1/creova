@@ -67,3 +67,7 @@ export interface GeneratedCampaign {
   imageGenerationPrompts: GenerationPrompt[];
   videoGenerationPrompts: GenerationPrompt[];
 }
+
+export interface SavedCampaign extends GeneratedCampaign {
+  associatedBriefName: string | null;
+}
